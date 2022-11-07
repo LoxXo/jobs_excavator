@@ -1,0 +1,19 @@
+JavaScript
+.NET
+Java
+React
+TypeScript
+Angular
+PHP
+C++
+Android
+Kotlin
+Vue.js
+iOS
+Golang
+C
+Ruby on Rails
+Flutter
+Elixir
+C#
+React native
