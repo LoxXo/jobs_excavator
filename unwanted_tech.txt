@@ -17,3 +17,8 @@ Flutter
 Elixir
 C#
 React native
+Scala
+German
+Romanian
+Hungarian
+French
