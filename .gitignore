@@ -128,6 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-notatka.txt
-secrets.py
-requirements.in
+# others
+cvsender_sqlite.db

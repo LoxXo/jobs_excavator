@@ -1,20 +1,51 @@
+import time
+import configparser
+
+import selenium.common.exceptions as Selenium_Exceptions
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+class WrongFormException(Exception):
+    """Raises if webdriver steps into unknown form page."""
 
 
 def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> list:
     wanted_city = ["Remote", "Katowice"]
     driver.get(link)
-    assert job_name in driver.title
+    driver.add_cookie(
+        {"name": "OptanonAlertBoxClosed", "value": "2022-11-24T13:42:59.701Z"}
+    )
+    WebDriverWait(driver, timeout=5).until(
+        EC.element_to_be_clickable((By.ID, "applyButton"))
+    )
     apply_button = driver.find_element(By.ID, "applyButton")
     apply_button.click()
 
-    # check if on stock nfj apply page
     try:
-        apply_text = driver.find_element(By.CSS_SELECTOR, "h2.tw-text-center").text
-        if not apply_text == "Apply for the job":
-            raise
+        if len(driver.window_handles) > 1:
+            print("closing new tab")
+            driver.switch_to.window((driver.window_handles[1]))
+            driver.close()
+            driver.switch_to.window((driver.window_handles[0]))
+            raise WrongFormException
+    except WrongFormException:
+        # temporary writes fails to .txt file
+        print(f"WrongForm for {offer_id}")
+        with open("failed_dump.txt", "a", encoding="utf-8") as fail:
+            fail.write(
+                f"Not on NFJ built-in apply page - skipping offer: {offer_id}, {job_name}, {link}\n"
+            )
+        pass
+
+    # try as on stock nfj apply page and if not dump report to .txt
+    try:
+        WebDriverWait(driver, timeout=5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "h2.tw-text-center"))
+        )
 
         # add full name
         name_field = driver.find_element(By.XPATH, "//input[@formcontrolname='name']")
@@ -37,9 +68,9 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
 
         # upload cv
         cv_upload = driver.find_element(By.XPATH, "//*[@id='attachment']")
-        cv_upload.send_keys("D:\\text.txt")
+        cv_upload.send_keys("D:\\text.pdf")
 
-        # add linkedin info
+        # add linkedin info in popup
         add_linkedin = driver.find_element(
             By.CSS_SELECTOR,
             "nfj-apply-optional.tw-my-2\.5:nth-child(7) > div:nth-child(1)",
@@ -48,36 +79,42 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
         add_linkedin_url = driver.find_element(
             By.CSS_SELECTOR, "input.ng-pristine:nth-child(1)"
         )
-        add_linkedin_url.send_keys("LINK DO LINKEDIN")
+        add_linkedin_url.send_keys("https://www.linkedin.com/in/blelble/")
         driver.find_element(By.CSS_SELECTOR, "button.nfj-btn:nth-child(2)").click()
 
-        # add github info
+        # add github info in popup
         add_github = driver.find_element(
             By.CSS_SELECTOR,
             "nfj-apply-optional.tw-my-2\.5:nth-child(8) > div:nth-child(1)",
         )
         add_github.click()
-        add_github_url = driver.find_elements(
+        add_github_url = driver.find_element(
             By.CSS_SELECTOR, "input.ng-pristine:nth-child(1)"
         )
-        add_github_url.send_keys("LINK DO GITHUB")
+        add_github_url.send_keys("https://github.com/xxx")
         driver.find_element(By.CSS_SELECTOR, "button.nfj-btn:nth-child(2)").click()
 
         # apply
         driver.find_element(By.CSS_SELECTOR, ".btn-apply").click()
 
         print(f"Successfully sent CV to offer ID: {offer_id} {job_name}")
-        return offer_id, job_name
+        return offer_id
 
-    except:
-        print(
-            f"Not on NFJ built-in apply page, skipping offer: {offer_id} {job_name} {link}"
-        )
+    except Selenium_Exceptions.TimeoutException as te:
+        print(f"Timeout during webdriver work ID: {offer_id}")
 
 
-def run_sender(offers: list):
+def run_sender(offers: list) -> list:
+    """Start webdriver and calls load_page() for every value in given list to
+    check offer's link and try to apply.
+    Returns offer_id of successfully applied job"""
     driver = webdriver.Firefox()
+    sent_cv = []
 
-    # index 1 is id, index 2 is job_name and index 8 is link
+    # index 1 is id, index 2 is job_name and index 10 is link
     for offer in offers:
-        load_page(driver, offer.id, offer.job_name, offer.link)
+        cv = load_page(driver, offer[1], offer[2], offer[10])
+        sent_cv.append(cv)
+        time.sleep(5)
+
+    return sent_cv
