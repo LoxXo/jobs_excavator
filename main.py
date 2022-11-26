@@ -153,7 +153,7 @@ def update_sent_cv(conn, offers_id):
 
 
 def select_unsend_offers(conn) -> list:
-    sql = """ SELECT * FROM offers WHERE sent_cv is FALSE"""
+    sql = """ SELECT * FROM offers WHERE sent_cv = 'False'"""
     unsend_offers = None
     try:
         cur = conn.cursor()

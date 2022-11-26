@@ -16,9 +16,14 @@ class WrongFormException(Exception):
 def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> list:
     wanted_city = ["Remote", "Katowice"]
     driver.get(link)
+
+    # add cookie for nfj to prevent cookie info popup and clear any localstorage data
     driver.add_cookie(
         {"name": "OptanonAlertBoxClosed", "value": "2022-11-24T13:42:59.701Z"}
     )
+    driver.execute_script("window.localStorage.clear()")
+
+    time.sleep(2)
     WebDriverWait(driver, timeout=5).until(
         EC.element_to_be_clickable((By.ID, "applyButton"))
     )
@@ -39,7 +44,7 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
             fail.write(
                 f"Not on NFJ built-in apply page - skipping offer: {offer_id}, {job_name}, {link}\n"
             )
-        pass
+        return None
 
     # try as on stock nfj apply page and if not dump report to .txt
     try:
@@ -79,7 +84,7 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
         add_linkedin_url = driver.find_element(
             By.CSS_SELECTOR, "input.ng-pristine:nth-child(1)"
         )
-        add_linkedin_url.send_keys("https://www.linkedin.com/in/blelble/")
+        add_linkedin_url.send_keys("https://www.linkedin.com/in/john-doe/")
         driver.find_element(By.CSS_SELECTOR, "button.nfj-btn:nth-child(2)").click()
 
         # add github info in popup
@@ -91,10 +96,20 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
         add_github_url = driver.find_element(
             By.CSS_SELECTOR, "input.ng-pristine:nth-child(1)"
         )
-        add_github_url.send_keys("https://github.com/xxx")
+        add_github_url.send_keys("https://github.com/xX_www_Xx")
         driver.find_element(By.CSS_SELECTOR, "button.nfj-btn:nth-child(2)").click()
 
-        # apply
+        # try to click consents
+        try:
+            driver.find_element(By.CSS_SELECTOR, "#currentConsent").click()
+            driver.find_element(By.CSS_SELECTOR, "#futureConsent").click()
+        except:
+            pass
+
+        # make screenshot before applying
+        driver.save_screenshot(f"./screenshots_sent/{offer_id}.png")
+
+        # click apply button
         driver.find_element(By.CSS_SELECTOR, ".btn-apply").click()
 
         print(f"Successfully sent CV to offer ID: {offer_id} {job_name}")
@@ -102,6 +117,10 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
 
     except Selenium_Exceptions.TimeoutException as te:
         print(f"Timeout during webdriver work ID: {offer_id}")
+        return None
+    except:
+        print("Some kind of error when completing recruitment form.")
+        return None
 
 
 def run_sender(offers: list) -> list:
@@ -114,7 +133,10 @@ def run_sender(offers: list) -> list:
     # index 1 is id, index 2 is job_name and index 10 is link
     for offer in offers:
         cv = load_page(driver, offer[1], offer[2], offer[10])
-        sent_cv.append(cv)
-        time.sleep(5)
+        if cv is not None:
+            sent_cv.append(cv)
+        time.sleep(3)
+
+    driver.close()
 
     return sent_cv

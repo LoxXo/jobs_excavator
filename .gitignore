@@ -130,3 +130,5 @@ dmypy.json
 
 # others
 cvsender_sqlite.db
+failed_dump.txt
+browserlocaldata.txt
