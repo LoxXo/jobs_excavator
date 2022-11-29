@@ -1,7 +1,7 @@
 import time
 import configparser
 
-import selenium.common.exceptions as Selenium_Exceptions
+from selenium.common.exceptions import TimeoutException
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -16,19 +16,23 @@ class WrongFormException(Exception):
 def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> list:
     wanted_city = ["Remote", "Katowice"]
     driver.get(link)
-
     # add cookie for nfj to prevent cookie info popup and clear any localstorage data
     driver.add_cookie(
         {"name": "OptanonAlertBoxClosed", "value": "2022-11-24T13:42:59.701Z"}
     )
     driver.execute_script("window.localStorage.clear()")
-
     time.sleep(2)
-    WebDriverWait(driver, timeout=5).until(
-        EC.element_to_be_clickable((By.ID, "applyButton"))
-    )
-    apply_button = driver.find_element(By.ID, "applyButton")
-    apply_button.click()
+    try:
+        WebDriverWait(driver, timeout=10).until(
+            EC.element_to_be_clickable((By.ID, "applyButton"))
+        )
+        apply_button = driver.find_element(By.ID, "applyButton")
+        apply_button.click()
+    except TimeoutException:
+        print(
+            f"Timeout exception after loading page - can't find applyButton on offer ID: {offer_id}"
+        )
+        return None
 
     try:
         if len(driver.window_handles) > 1:
@@ -58,7 +62,7 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
 
         # add email
         email_field = driver.find_element(By.XPATH, "//input[@type='email']")
-        email_field.send_keys("email tutaj")
+        email_field.send_keys("Email here")
 
         # choose desired location
         location_span = driver.find_element(By.CSS_SELECTOR, ".dropdown-btn")
@@ -109,13 +113,18 @@ def load_page(driver: webdriver, offer_id: str, job_name: str, link: str) -> lis
         # make screenshot before applying
         driver.save_screenshot(f"./screenshots_sent/{offer_id}.png")
 
-        # click apply button
-        driver.find_element(By.CSS_SELECTOR, ".btn-apply").click()
+        # try to apply (maybe captcha?)
+        try:
+            driver.find_element(By.CSS_SELECTOR, ".btn-apply").click()
+            print(f"Successfully sent CV to offer ID: {offer_id} {job_name}")
+            return offer_id
+        except:
+            print(
+                f"Basic NFJ form filled but can't send it - offer ID: {offer_id} {job_name}"
+            )
+            return None
 
-        print(f"Successfully sent CV to offer ID: {offer_id} {job_name}")
-        return offer_id
-
-    except Selenium_Exceptions.TimeoutException as te:
+    except TimeoutException:
         print(f"Timeout during webdriver work ID: {offer_id}")
         return None
     except:
