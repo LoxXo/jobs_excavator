@@ -1,0 +1,19 @@
+{
+    "criteriaSearch":{
+       "city":[
+          "remote",
+          "katowice"
+       ],
+       "category":[
+          "backend",
+          "fullstack"
+       ],
+       "requirement": [
+         "Python"
+       ],
+       "seniority":[
+          "trainee",
+          "junior"
+       ]
+    }
+}

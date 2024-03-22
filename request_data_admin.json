@@ -1,0 +1,15 @@
+{
+    "criteriaSearch":{
+       "city":[
+          "remote",
+          "katowice"
+       ],
+       "category":[
+          "sys-administrator"
+       ],
+       "seniority":[
+          "trainee",
+          "junior"
+       ]
+    }
+}

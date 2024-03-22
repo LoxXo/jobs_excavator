@@ -1,0 +1,16 @@
+{
+    "criteriaSearch":{
+       "city":[
+          "remote",
+          "katowice"
+       ],
+       "category":[
+          "security"
+       ],
+       "seniority":[
+          "trainee",
+          "junior",
+          "mid"
+       ]
+    }
+}

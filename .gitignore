@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # others
-cvsender_sqlite.db
+*.db
 failed_dump.txt
 browserlocaldata.txt

@@ -1,5 +1,5 @@
-import os
 import sqlite3
+import json
 import datetime
 from sqlite3 import Error
 from typing import Optional
@@ -8,7 +8,6 @@ import requests
 from pydantic import BaseModel
 
 import tables
-import cvsender
 
 
 """ add ConfigIni class with methods to get values for filtering, getting offers and cvsender
@@ -18,14 +17,15 @@ like this: config = ConfigIni('config.ini')
 
 class NfjOffers(BaseModel):
     id: str
+    reference: str
     job_name: str
     category: str
     company: str
     tech_main: str
-    tech_must: list = None
-    tech_nice: list = None
-    city: list
-    get_ts: datetime.datetime = None
+    tech_must: list = []
+    tech_nice: list = []
+    city: list = []
+    get_ts: datetime.datetime = None # type: ignore
     sent_cv: str = "False"
     sent_ts: Optional[datetime.datetime] = None
     contact: str = "False"
@@ -129,10 +129,8 @@ def create_offers_cities(conn, offer):
             cur = conn.cursor()
             cur.execute(sql, (offer.id, city))
             conn.commit()
-        except Error as e:
-            print("Error when creating offers_cities: " + str(e))
-            conn.rollback()
-            conn.close()
+        except Error:
+            continue
 
 
 def update_sent_cv(conn, offers_id):
@@ -154,7 +152,7 @@ def update_sent_cv(conn, offers_id):
 
 def select_unsend_offers(conn) -> list:
     sql = """ SELECT * FROM offers WHERE sent_cv = 'False'"""
-    unsend_offers = None
+    unsend_offers = []
     try:
         cur = conn.cursor()
         unsend_offers = cur.execute(sql)
@@ -166,62 +164,33 @@ def select_unsend_offers(conn) -> list:
     return list(unsend_offers)
 
 
-def post_search_nfj(offer_limit: int) -> dict:
+def post_search_nfj(json_file: str, offer_limit: int) -> dict:
     """Requests job offers from NFJ according to payload inside function."""
-    print("Getting NFJ job offers.")
+    print(f"Getting NFJ job offers for {json_file}.")
     headers = {
-        "authority": "nofluffjobs.com",
-        "accept": "application/json, text/plain, */*",
-        "accept-language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
-        "cache-control": "no-cache",
-        "dnt": "1",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+        'authority': 'nofluffjobs.com',
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+        'cache-control': 'no-cache',
+        'content-type': 'application/infiniteSearch+json',
+        'dnt': '1',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     }
 
     params = {
-        "limit": f"{offer_limit}",
-        "offset": "0",
-        "salaryCurrency": "PLN",
-        "salaryPeriod": "month",
-        "region": "pl",
+        'pageFrom': '1',
+        'pageTo': '1',
+        'pageSize': f'{offer_limit}',
+        'salaryCurrency': 'PLN',
+        'salaryPeriod': 'month',
     }
+    with open(json_file) as file:
+        data = json.load(file)
+        data=str(data)
+    #data = '{"criteriaSearch":{"city":["remote", "katowice"],"category":["backend"],"seniority":["trainee", "junior"]}}'
 
-    json_data = {
-        "criteriaSearch": {
-            "city": [
-                "remote",
-                "katowice",
-                "gliwice",
-            ],
-            "category": [
-                "backend",
-                "frontend",
-                "fullstack",
-                "mobile",
-                "testing",
-                "security",
-                "artificial-intelligence",
-                "big-data",
-                "support",
-                "it-administrator",
-                "agile",
-                "business-intelligence",
-                "business-analyst",
-            ],
-            "seniority": [
-                "trainee",
-                "junior",
-            ],
-        },
-    }
-
-    response = requests.post(
-        "https://nofluffjobs.com/api/search/posting",
-        params=params,
-        headers=headers,
-        json=json_data,
-    )
-    # print(response.json())
+    response = requests.post('https://nofluffjobs.com/api/search/posting', params=params, headers=headers, data=data)
+    #print(response.json())
     return response.json()
 
 
@@ -231,12 +200,18 @@ def extract_nfj(json_nfj: dict) -> list[NfjOffers]:
     # need to exctract info from dict.lists to NfjOffers class
     for postings in json_nfj["postings"]:
         cities = postings["location"]["places"]
-        cities = [e["city"] for e in cities]
+        for e in cities:
+            try:
+                cities.append(e["city"])
+            except Exception:
+                continue
+        #cities = [e["city"] for e in cities]
         # using get() to avert KeyError
         technology = postings.get("technology", "")
         extracted_nfj.append(
             NfjOffers(
                 id=postings["id"],
+                reference=postings["reference"],
                 job_name=postings["title"],
                 category=postings["category"],
                 company=postings["name"],
@@ -270,7 +245,7 @@ def check_single_offers_nfj(offers_list: list[NfjOffers]) -> list[NfjOffers]:
     for idoffer, offer in enumerate(offers_list_copy):
         must_list = []
         nice_list = []
-        single_offer = get_single_offer_nfj(offer.id)
+        single_offer = get_single_offer_nfj(offer.reference)
 
         for musts in single_offer["requirements"]["musts"]:
             must_list.append(musts["value"])
@@ -328,7 +303,7 @@ def collect_tech(offers_list: list[NfjOffers]) -> set:
     tech_set = set()
     for offer in offers_list:
         # for idoffer, offer in enumerate(offers_list):
-        single_offer = get_single_offer_nfj(offer.id)
+        single_offer = get_single_offer_nfj(offer.reference)
 
         for musts in single_offer["requirements"]["musts"]:
             tech_set.add(musts["value"])
@@ -343,9 +318,14 @@ def collect_cities(json_nfj: dict) -> set:
     cities_set = set()
     for postings in json_nfj["postings"]:
         cities = postings["location"]["places"]
-        cities = [e["city"] for e in cities]
-        for city in cities:
-            cities_set.add(city)
+        #cities = [e["city"] for e in cities]
+        for e in cities:
+            try:
+                cities_set.add(e["city"])
+            except Exception:
+                continue
+        #for city in cities:
+        #    cities_set.add(city)
 
     return cities_set
 
@@ -360,8 +340,19 @@ def start_collection(conn, json_nfj: dict, extracted_nfj: list[NfjOffers]) -> No
     print("Collecting finished. Database updated with cities and technologies.")
 
 
+def full_job(json_file: str, conn, offer_limit: int) -> None:
+    response = post_search_nfj(json_file, offer_limit)
+    extracted_nfj = extract_nfj(response)
+    start_collection(conn, response, extracted_nfj)
+    single_list = check_single_offers_nfj(extracted_nfj)
+    list_to_send = filter_offer(single_list)
+    for offer in list_to_send:
+        create_offer(conn, offer)
+    print(f"Offers added to database successfully for {json_file}.")
+
+
 def main():
-    conn = create_connection("cvsender_sqlite.db")
+    conn = create_connection("jobsexcavator_sqlite.db")
 
     if conn is not None:
         create_table(conn, tables.sql_table_cities)
@@ -371,22 +362,11 @@ def main():
         create_table(conn, tables.sql_table_offers_tech)
     else:
         print("Error, no database connection.")
+        exit()
 
-    response = post_search_nfj(10)
-    extracted_nfj = extract_nfj(response)
-
-    start_collection(conn, response, extracted_nfj)
-
-    single_list = check_single_offers_nfj(extracted_nfj)
-    list_to_send = filter_offer(single_list)
-    for offer in list_to_send:
-        create_offer(conn, offer)
-    print("Offers added to database successfully.")
-
-    unsend = select_unsend_offers(conn)
-    sent_cv = cvsender.run_sender(unsend)
-    print(sent_cv)
-    update_sent_cv(conn, sent_cv)
+    full_job("request_data_sec.json", conn, 50)
+    full_job("request_data_admin.json", conn, 50)
+    full_job("request_data_python.json", conn, 50)
 
     conn.close()
 
